@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snake Klasik</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600&display=swap">
+<style>
+:root{--bg:#e9efe0;--board:#c8d8a8;--grid:#bccd9a;--snake:#26401a;--food:#c0392f;--ink:#1d2e14;--mute:#58704a;--btn:#26401a;--btn-ink:#f1f6e8;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10160c;--board:#1b2713;--grid:#1f2d16;--snake:#a8e063;--food:#ff6b5e;--ink:#e3f0cf;--mute:#8fa87a;--btn:#a8e063;--btn-ink:#10160c}}
+:root[data-theme="dark"]{--bg:#10160c;--board:#1b2713;--grid:#1f2d16;--snake:#a8e063;--food:#ff6b5e;--ink:#e3f0cf;--mute:#8fa87a;--btn:#a8e063;--btn-ink:#10160c}
+html,body{height:100%}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 "Plus Jakarta Sans",system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;gap:12px}
+h1{font:700 1.6rem/1 "Silkscreen",monospace;margin:0;letter-spacing:.02em}
+.score{display:flex;gap:28px;font:700 1rem "Silkscreen",monospace}
+.score span{color:var(--mute);font-weight:400;margin-right:6px}
+.stage{position:relative;width:min(92vw,420px)}
+canvas{display:block;width:100%;aspect-ratio:1;background:var(--board);border:3px solid var(--snake);border-radius:6px;touch-action:none}
+.over{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,var(--bg) 82%,transparent);text-align:center;border-radius:6px}
+.over[hidden]{display:none}
+.over b{font:700 1.5rem "Silkscreen",monospace}
+.over p{margin:0;color:var(--mute);max-width:80%}
+button{font:600 1rem "Plus Jakarta Sans",sans-serif;background:var(--btn);color:var(--btn-ink);border:0;border-radius:10px;padding:10px 22px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.pad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,56px);gap:6px}
+.pad button{padding:0;font-size:1.4rem}
+.pad .u{grid-column:2}.pad .l{grid-column:1;grid-row:2}.pad .d{grid-column:2;grid-row:2}.pad .r{grid-column:3;grid-row:2}
+.hint{color:var(--mute);font-size:.85rem;margin:0}
+</style>
+</head>
+<body>
+<h1>Snake</h1>
+<div class="score"><div><span>Skor</span><b id="sc">0</b></div><div><span>Terbaik</span><b id="hi">0</b></div></div>
+<div class="stage">
+  <canvas id="c" width="420" height="420" aria-label="Papan permainan Snake"></canvas>
+  <div class="over" id="ov"><b id="ovT">Siap main?</b><p id="ovP">Makan apel, hindari dinding dan tubuh sendiri.</p><button id="go" type="button">Mulai</button></div>
+</div>
+<div class="pad" aria-label="Kontrol arah">
+  <button class="u" data-d="U" aria-label="Atas">&#9650;</button>
+  <button class="l" data-d="L" aria-label="Kiri">&#9664;</button>
+  <button class="d" data-d="D" aria-label="Bawah">&#9660;</button>
+  <button class="r" data-d="R" aria-label="Kanan">&#9654;</button>
+</div>
+<p class="hint">Panah / WASD / geser layar &middot; Spasi untuk jeda</p>
+
+<script>
+(function(){
+  var N=20,cv=document.getElementById("c"),cx=cv.getContext("2d"),S=cv.width/N;
+  var KEY="snake-hi-v1",DIRS={U:[0,-1],D:[0,1],L:[-1,0],R:[1,0]};
+  var snake,dir,next,food,score,timer,running=false,paused=false,hi=0;
+  var $=function(i){return document.getElementById(i)};
+  try{hi=Number(localStorage.getItem(KEY))||0}catch(e){}
+  $("hi").textContent=hi;
+  var css=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()};
+
+  function placeFood(){
+    do{food=[Math.floor(Math.random()*N),Math.floor(Math.random()*N)]}
+    while(snake.some(function(p){return p[0]===food[0]&&p[1]===food[1]}));
+  }
+  function reset(){
+    snake=[[10,10],[9,10],[8,10]];dir=next=DIRS.R;score=0;$("sc").textContent=0;placeFood();
+  }
+  function speed(){return Math.max(60,150-Math.floor(score/5)*8)}
+  function loop(){clearTimeout(timer);if(!running||paused)return;step();timer=setTimeout(loop,speed())}
+
+  function step(){
+    dir=next;
+    var h=[snake[0][0]+dir[0],snake[0][1]+dir[1]];
+    var eat=h[0]===food[0]&&h[1]===food[1];
+    var body=eat?snake:snake.slice(0,-1);
+    if(h[0]<0||h[1]<0||h[0]>=N||h[1]>=N||body.some(function(p){return p[0]===h[0]&&p[1]===h[1]})){return end()}
+    snake.unshift(h);
+    if(eat){score++;$("sc").textContent=score;placeFood()}else snake.pop();
+    draw();
+  }
+  function end(){
+    running=false;draw();
+    var nb=score>hi;
+    if(nb){hi=score;$("hi").textContent=hi;try{localStorage.setItem(KEY,hi)}catch(e){}}
+    $("ovT").textContent="Game over";
+    $("ovP").textContent="Skor "+score+(nb&&score>0?" — rekor baru!":"");
+    $("go").textContent="Main lagi";$("ov").hidden=false;
+  }
+  function draw(){
+    cx.clearRect(0,0,cv.width,cv.height);
+    cx.fillStyle=css("--grid");
+    for(var x=0;x<N;x++)for(var y=0;y<N;y++)if((x+y)%2)cx.fillRect(x*S,y*S,S,S);
+    cx.fillStyle=css("--food");
+    cx.beginPath();cx.arc(food[0]*S+S/2,food[1]*S+S/2,S*.38,0,7);cx.fill();
+    cx.fillStyle=css("--snake");
+    snake.forEach(function(p,i){
+      var pad=i?2:1;cx.fillRect(p[0]*S+pad,p[1]*S+pad,S-pad*2,S-pad*2);
+    });
+  }
+  function start(){reset();running=true;paused=false;$("ov").hidden=true;draw();loop()}
+  function turn(k){
+    var d=DIRS[k];if(!d)return;
+    if(d[0]===-dir[0]&&d[1]===-dir[1])return;
+    next=d;
+  }
+  function togglePause(){
+    if(!running)return;paused=!paused;
+    if(paused){$("ovT").textContent="Jeda";$("ovP").textContent="Tekan spasi untuk lanjut.";$("go").textContent="Lanjut";$("ov").hidden=false}
+    else{$("ov").hidden=true;loop()}
+  }
+  $("go").onclick=function(){if(running&&paused)togglePause();else start()};
+
+  var map={ArrowUp:"U",ArrowDown:"D",ArrowLeft:"L",ArrowRight:"R",w:"U",s:"D",a:"L",d:"R",W:"U",S:"D",A:"L",D:"R"};
+  document.addEventListener("keydown",function(e){
+    if(e.key===" "){e.preventDefault();running?togglePause():start();return}
+    if(map[e.key]){e.preventDefault();if(running&&!paused)turn(map[e.key])}
+  });
+  document.querySelectorAll(".pad button").forEach(function(b){
+    b.addEventListener("pointerdown",function(e){e.preventDefault();if(running&&!paused)turn(b.dataset.d)});
+  });
+  var t0;
+  cv.addEventListener("touchstart",function(e){t0=e.touches[0]},{passive:true});
+  cv.addEventListener("touchend",function(e){
+    if(!t0||!running||paused)return;
+    var t=e.changedTouches[0],dx=t.clientX-t0.clientX,dy=t.clientY-t0.clientY;
+    if(Math.max(Math.abs(dx),Math.abs(dy))<20)return;
+    turn(Math.abs(dx)>Math.abs(dy)?(dx>0?"R":"L"):(dy>0?"D":"U"));
+  },{passive:true});
+
+  reset();draw();
+})();
+</script>
+</body>
+</html>
